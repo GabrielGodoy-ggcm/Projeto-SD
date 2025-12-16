@@ -1,12 +1,12 @@
 module safecrack_fsm (
-    input logic clk, // Clock 50MHz da DE2-115
-    input logic rst_n, // Reset (Active Low) - KEY0 costuma ser reset
-    input logic [2:0] btn, // Botões (KEY3, KEY2, KEY1) - Active Low
-    output logic [7:0] led_green, // LEDs Verdes (Feedback de progresso/sucesso)
-    output logic led_red // LED Vermelho (Indicador de erro)
+    input logic clk, // Clock 
+    input logic rst_n, // Reset
+    input logic [2:0] btn, // Botões
+    output logic [7:0] led_green, // LEDs Verdes 
+    output logic led_red // LED Vermelho 
 );
 
-    // --- Definição dos Estados ---
+    TODOS OS ESTADOS POSSÍVEIS
     typedef enum logic [2:0] {
         S_WAIT1, // Aguardando 1º Dígito (1 Verde)
         S_WAIT2, // Aguardando 2º Dígito (2 Verdes)
@@ -20,18 +20,18 @@ module safecrack_fsm (
     localparam int TIME_3S = 150_000_000; 
     localparam int TIME_5S = 250_000_000;
     
-    // Contador para os temporizadores
-    // $clog2 calcula quantos bits são necessários para o maior valor
+    // LÓGICA DE TEMPO
     logic [$clog2(TIME_5S)-1:0] counter; 
     logic clear_timer; // Sinal para zerar o contador ao mudar de estado
 
+    // LÓGICA DOS BOTÕES
     logic [2:0] btn_prev, btn_edge, btn_sync;
     logic any_btn_edge;
 
     always_comb begin
-        btn_sync = ~btn; // Inverte: 1 significa pressionado
-        btn_edge = btn_sync & ~btn_prev; // Detecta transição 0->1
-        any_btn_edge = (|btn_edge); // Flag se qualquer botão foi apertado
+        btn_sync = ~btn; 
+        btn_edge = btn_sync & ~btn_prev; 
+        any_btn_edge = (|btn_edge); 
     end
 
     always_ff @(posedge clk or negedge rst_n) begin
@@ -53,7 +53,6 @@ module safecrack_fsm (
     end
 
     always_comb begin
-        // Valores padrão
         next_state = state;
         clear_timer = 0;
 
@@ -61,7 +60,7 @@ module safecrack_fsm (
         led_red = 1'b0;
 
         case (state)
-            // ESTADO 1: Espera Botão 1 ---
+            // ESTADO PADRÃO
             S_WAIT1: begin
                 led_green = 8'b00000001; // 1 LED Verde
                 
@@ -74,7 +73,7 @@ module safecrack_fsm (
                 end
             end
 
-            // ESTADO 2: Espera Botão 2
+            // Espera Botão 2
             S_WAIT2: begin
                 led_green = 8'b00000011; // 2 LEDs Verdes
                 
@@ -87,7 +86,7 @@ module safecrack_fsm (
                 end
             end
 
-            // ESTADO 3: Espera Botão 3
+            // Espera Botão 3
             S_WAIT3: begin
                 led_green = 8'b00000111; // 3 LEDs Verdes
                 
@@ -119,9 +118,10 @@ module safecrack_fsm (
                     clear_timer = 1;
                 end
             end
-            
+            // VOLTA PRO ESTADO PADRÃO
             default: next_state = S_WAIT1;
         endcase
     end
+
 
 endmodule
