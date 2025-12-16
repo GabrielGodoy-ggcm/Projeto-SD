@@ -1,135 +1,125 @@
-module safecrack_pro (
-    input  logic        clk,        // Clock 50 MHz
-    input  logic        rst_n,      // Reset ativo em nível baixo
-    input  logic [2:0]  btn,        // Botões (ativos em 0)
-    output logic [7:0]  led_green,  // LEDs verdes
-    output logic        led_red     // LED vermelho
+module safecrack_fsm (
+    input logic clk, // Clock 50MHz da DE2-115
+    input logic rst_n, // Reset (Active Low) - KEY0 costuma ser reset
+    input logic [2:0] btn, // Botões (KEY3, KEY2, KEY1) - Active Low
+    output logic [7:0] led_green, // LEDs Verdes (Feedback de progresso/sucesso)
+    output logic led_red // LED Vermelho (Indicador de erro)
 );
 
-    // -------------------------------------------------
-    // DEFINIÇÃO DOS ESTADOS
-    // -------------------------------------------------
+    // --- Definição dos Estados ---
     typedef enum logic [2:0] {
-        S_WAIT1,
-        S_WAIT2,
-        S_WAIT3,
-        S_OPEN,
-        S_ERROR
+        S_WAIT1, // Aguardando 1º Dígito (1 Verde)
+        S_WAIT2, // Aguardando 2º Dígito (2 Verdes)
+        S_WAIT3, // Aguardando 3º Dígito (3 Verdes)
+        S_OPEN, // Sucesso (Todos Verdes por 5s)
+        S_ERROR // Erro (1 Vermelho por 3s)
     } state_t;
 
     state_t state, next_state;
 
-    // -------------------------------------------------
-    // CONSTANTES DE TEMPO (50 MHz)
-    // -------------------------------------------------
-    localparam int TIME_3S = 150_000_000;
+    localparam int TIME_3S = 150_000_000; 
     localparam int TIME_5S = 250_000_000;
+    
+    // Contador para os temporizadores
+    // $clog2 calcula quantos bits são necessários para o maior valor
+    logic [$clog2(TIME_5S)-1:0] counter; 
+    logic clear_timer; // Sinal para zerar o contador ao mudar de estado
 
-    // Contador para temporização
-    logic [$clog2(TIME_5S)-1:0] counter;
-
-    // -------------------------------------------------
-    // TRATAMENTO DOS BOTÕES (SINCRONIZAÇÃO + BORDA)
-    // -------------------------------------------------
-    logic [2:0] btn_sync;
-    logic [2:0] btn_prev;
-    logic [2:0] btn_edge;
-
-    assign btn_sync = ~btn;            // Ativo em nível alto
-    assign btn_edge = btn_sync & ~btn_prev;
-    assign any_btn_edge = |btn_edge;
-
+    logic [2:0] btn_prev, btn_edge, btn_sync;
     logic any_btn_edge;
 
-    // -------------------------------------------------
-    // LÓGICA SEQUENCIAL (MEMÓRIA)
-    // -------------------------------------------------
+    always_comb begin
+        btn_sync = ~btn; // Inverte: 1 significa pressionado
+        btn_edge = btn_sync & ~btn_prev; // Detecta transição 0->1
+        any_btn_edge = (|btn_edge); // Flag se qualquer botão foi apertado
+    end
+
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            state     <= S_WAIT1;
-            btn_prev  <= 3'b000;
-            counter   <= '0;
+            state <= S_WAIT1;
+            btn_prev <= 3'b000;
+            counter <= 0;
         end else begin
-            state    <= next_state;
+            state <= next_state;
             btn_prev <= btn_sync;
 
-            // Temporizador
-            if (state != next_state)
-                counter <= '0;
-            else if (state == S_OPEN || state == S_ERROR)
+            if (clear_timer) 
+                counter <= 0;
+            else if (state == S_ERROR || state == S_OPEN) 
                 counter <= counter + 1;
-            else
-                counter <= '0;
+            else 
+                counter <= 0;
         end
     end
 
-    // -------------------------------------------------
-    // LÓGICA COMBINACIONAL (FSM + SAÍDAS)
-    // -------------------------------------------------
     always_comb begin
         // Valores padrão
         next_state = state;
-        led_green  = 8'b00000000;
-        led_red    = 1'b0;
+        clear_timer = 0;
+
+        led_green = 8'b00000000;
+        led_red = 1'b0;
 
         case (state)
-
-            // -------------------------
-            // ESPERA DÍGITO 1
-            // -------------------------
+            // ESTADO 1: Espera Botão 1 ---
             S_WAIT1: begin
-                led_green = 8'b00000001;
-
-                if (btn_edge == 3'b001)
+                led_green = 8'b00000001; // 1 LED Verde
+                
+                if (btn_edge == 3'b001) begin // Botão 1 (Correto)
                     next_state = S_WAIT2;
-                else if (any_btn_edge)
+                    clear_timer = 1;
+                end else if (any_btn_edge) begin // Botão Errado
                     next_state = S_ERROR;
+                    clear_timer = 1;
+                end
             end
 
-            // -------------------------
-            // ESPERA DÍGITO 2
-            // -------------------------
+            // ESTADO 2: Espera Botão 2
             S_WAIT2: begin
-                led_green = 8'b00000011;
-
-                if (btn_edge == 3'b010)
+                led_green = 8'b00000011; // 2 LEDs Verdes
+                
+                if (btn_edge == 3'b010) begin // Botão 2 (Correto)
                     next_state = S_WAIT3;
-                else if (any_btn_edge)
+                    clear_timer = 1;
+                end else if (any_btn_edge) begin // Botão Errado
                     next_state = S_ERROR;
+                    clear_timer = 1;
+                end
             end
 
-            // -------------------------
-            // ESPERA DÍGITO 3
-            // -------------------------
+            // ESTADO 3: Espera Botão 3
             S_WAIT3: begin
-                led_green = 8'b00000111;
-
-                if (btn_edge == 3'b100)
-                    next_state = S_OPEN;
-                else if (any_btn_edge)
+                led_green = 8'b00000111; // 3 LEDs Verdes
+                
+                if (btn_edge == 3'b100) begin // Botão 3 (Correto)
+                    next_state = S_OPEN; // Vai para Sucesso
+                    clear_timer = 1; // Prepara contador do timer
+                end else if (any_btn_edge) begin // Botão Errado
                     next_state = S_ERROR;
+                    clear_timer = 1;
+                end
             end
 
-            // -------------------------
-            // SUCESSO (5s)
-            // -------------------------
+            // SUCESSO: Aberto por 5s
             S_OPEN: begin
-                led_green = 8'b11111111;
-
-                if (counter == TIME_5S - 1)
-                    next_state = S_WAIT1;
+                led_green = 8'b11111111; // Todos LEDs Verdes
+                
+                if (counter >= TIME_5S) begin
+                    next_state = S_WAIT1; 
+                    clear_timer = 1;
+                end
             end
 
-            // -------------------------
-            // ERRO (3s)
-            // -------------------------
+            // ERRO: Bloqueado por 3s
             S_ERROR: begin
-                led_red = 1'b1;
-
-                if (counter == TIME_3S - 1)
+                led_red = 1'b1; // 1 LED Vermelho
+                
+                if (counter >= TIME_3S) begin
                     next_state = S_WAIT1;
+                    clear_timer = 1;
+                end
             end
-
+            
             default: next_state = S_WAIT1;
         endcase
     end
