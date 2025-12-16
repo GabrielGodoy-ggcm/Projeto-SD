@@ -1,7 +1,7 @@
 # Projeto-SD
 
 Grupo: 
-- Gabriel Godoy
-- Davi Mello
-- Vitor Nunes
-- João Felipe Costa
+- Gabriel Godoy Carvalho de Menezes // ggcm
+- Davi de Souza Mello // dsm5
+- Vitor Nunes Silvestre Fernandes Costa // vnsfc
+- João Felipe Costa Neves // jfcn
